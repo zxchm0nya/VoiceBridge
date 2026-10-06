@@ -1,0 +1,97 @@
+<UserControl x:Class="VoiceBridge.Views.HelpView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d">
+    <UserControl.Resources>
+        <Style x:Key="StepText" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="LineHeight" Value="21" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="Margin" Value="0,0,0,8" />
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+        </Style>
+    </UserControl.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel MaxWidth="860" HorizontalAlignment="Left">
+
+            <!-- Как это работает -->
+            <Border Style="{StaticResource CardStyle}">
+                <StackPanel>
+                    <TextBlock Style="{StaticResource SectionTitle}" Text="Как это работает" />
+                    <Border Style="{StaticResource InnerBox}" Margin="0,14,0,0">
+                        <TextBlock FontSize="13" FontWeight="SemiBold" TextWrapping="Wrap"
+                                   Text="Наушники  →  захват системного звука (loopback)  →  виртуальный кабель  →  Discord видит это как микрофон" />
+                    </Border>
+                    <TextBlock Style="{StaticResource StepText}" Margin="0,14,0,0"
+                               Text="• Вы продолжаете слышать всё в наушниках как обычно — захват не мешает воспроизведению и не добавляет задержки в наушники." />
+                    <TextBlock Style="{StaticResource StepText}" Margin="-4,0,0,0"
+                               Text="• Захватывается весь звук выбранного устройства: игры, видео, музыка, другие приложения." />
+                    <TextBlock Style="{StaticResource StepText}" Margin="-4,0,0,0"
+                               Text="• Ничего не записывается на диск и не уходит в интернет — поток только локально перенаправляется." />
+                </StackPanel>
+            </Border>
+
+            <!-- Подключение к Discord -->
+            <Border Style="{StaticResource CardStyle}">
+                <StackPanel>
+                    <TextBlock Style="{StaticResource SectionTitle}" Text="Подключение к Discord" />
+                    <TextBlock Style="{StaticResource StepText}" Margin="0,14,0,0"
+                               Text="1. На странице «Маршрут» выберите свои наушники в поле «Слушать» и виртуальный кабель в поле «Выводить в», затем нажмите «Запустить»." />
+                    <TextBlock Style="{StaticResource StepText}" Margin="-4,0,0,0"
+                               Text="2. Проверьте индикаторы: подпись «Активно» и растущая полоса «В микрофон» — значит звук идёт в кабель." />
+                    <TextBlock Style="{StaticResource StepText}" Margin="-4,0,0,0"
+                               Text="3. Откройте Discord → Настройки → Голос и видео → раздел «Микрофон» → выберите микрофон кабеля. Точное имя подсказывает поле под списками устройств на странице «Маршрут» (у вас это «CABLE Output (VB-Audio Virtual Cable)»)." />
+                    <TextBlock Style="{StaticResource StepText}" Margin="-4,0,0,0"
+                               Text="4. В Discord отключите «Автоматическую настройку чувствительности» и убедитесь, что входной уровень реагирует на звук в наушниках." />
+                </StackPanel>
+            </Border>
+
+            <!-- Эхо -->
+            <Border Style="{StaticResource CardStyle}" BorderBrush="{DynamicResource WarningBrush}">
+                <StackPanel>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="&#xE7BA;" FontFamily="Segoe MDL2 Assets" FontSize="15"
+                                   Foreground="{DynamicResource WarningBrush}" Margin="0,1,10,0" />
+                        <TextBlock Grid.Column="1" Style="{StaticResource SectionTitle}"
+                                   Text="Важно: собеседник может слышать себя" />
+                    </Grid>
+                    <TextBlock Style="{StaticResource StepText}" Margin="0,14,0,0"
+                               Text="В голосовом Discord звучит друг — этот звук играет в ваших наушниках, попадает в захват и возвращается ему через ваш «микрофон» с задержкой. Он услышит самого себя. Так работает любой захват системного звука." />
+                    <TextBlock Style="{StaticResource StepText}" Margin="-4,0,0,0"
+                               Text="Что делать:" />
+                    <TextBlock Style="{StaticResource StepText}" Margin="-4,0,0,0"
+                               Text="• Самый простой вариант: используйте кабель, когда нужно показать другу звук игры, видео или музыки, а на время разговора нажимайте «Заглушить»." />
+                    <TextBlock Style="{StaticResource StepText}" Margin="-4,0,0,0"
+                               Text="• Или выведите голосовой канал Discord на другое устройство вывода (Discord → Настройки → Голос → устройство вывода), тогда в наушники его голос не попадёт." />
+                    <TextBlock Style="{StaticResource StepText}" Margin="-4,0,0,0"
+                               Text="• Если нужно одновременно слышать друга и передавать свой голос — включите «Микшать свой микрофон» и уберите голосовой канал из захваченного устройства, как описано выше." />
+                </StackPanel>
+            </Border>
+
+            <!-- Нет кабеля -->
+            <Border Style="{StaticResource CardStyle}">
+                <StackPanel>
+                    <TextBlock Style="{StaticResource SectionTitle}" Text="Если виртуального кабеля нет" />
+                    <TextBlock Style="{StaticResource StepText}" Margin="0,14,0,0"
+                               Text="Нужен виртуальный аудио-кабель. На этой машине установлен VB-Cable (цель — «Динамики (VB-Audio Virtual Cable)», микрофон для Discord — «CABLE Output (VB-Audio Virtual Cable)»). Старый кабель VAC «Line 1» в системе есть, но его записывающая сторона не работает — выбирайте VB-Cable." />
+                    <TextBlock Style="{StaticResource MutedText}" Margin="-4,0,0,0">
+                        <Hyperlink NavigateUri="https://vb-audio.com/Cable/"
+                                   RequestNavigate="Link_RequestNavigate"
+                                   Foreground="{DynamicResource AccentAltBrush}"
+                                   TextDecorations="None">https://vb-audio.com/Cable/</Hyperlink>
+                    </TextBlock>
+                    <TextBlock Style="{StaticResource StepText}" Margin="-4,8,0,0"
+                               Text="После установки вернитесь на странице «Маршрут» и нажмите «Обновить устройства»: цель выберите «Динамики (VB-Audio Virtual Cable)», а имя для Discord подскажет приложение." />
+                </StackPanel>
+            </Border>
+
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

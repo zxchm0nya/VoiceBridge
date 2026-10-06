@@ -1,0 +1,132 @@
+<Window x:Class="VoiceBridge.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:views="clr-namespace:VoiceBridge.Views"
+        Title="VoiceBridge"
+        Width="1000" Height="730" MinWidth="900" MinHeight="620"
+        WindowStartupLocation="CenterScreen"
+        Icon="Assets/app.ico"
+        Background="{DynamicResource BgDeepBrush}"
+        FontFamily="{StaticResource AppFont}">
+    <Grid>
+        <!-- фон: градиент по умолчанию, картинка поверх при наличии -->
+        <Border IsHitTestVisible="False" Background="{DynamicResource WindowGradient}" x:Name="GradientHost" />
+        <Border x:Name="BgImageHost" IsHitTestVisible="False" Visibility="Collapsed">
+            <Border.Background>
+                <ImageBrush x:Name="BgImageBrush" Stretch="UniformToFill" />
+            </Border.Background>
+        </Border>
+        <Border x:Name="BgDimHost" Background="#000000" Opacity="0" IsHitTestVisible="False" />
+
+        <Grid Margin="22,16,22,16">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <!-- ===== Заголовок ===== -->
+            <Grid Grid.Row="0" x:Name="HeaderRow">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="VoiceBridge" FontSize="20" FontWeight="SemiBold"
+                               VerticalAlignment="Center" />
+                    <TextBlock Text="наушники → микрофон" FontSize="11" Margin="13,2,0,0"
+                               Foreground="{DynamicResource TextMutedBrush}"
+                               VerticalAlignment="Center" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Border Style="{StaticResource Badge}" Margin="0,0,9,0"
+                            ToolTip="Какой микрофон выбрать в Discord">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE720;" FontFamily="Segoe MDL2 Assets" FontSize="12"
+                                       Foreground="{DynamicResource AccentAltBrush}" Margin="0,0,7,0"
+                                       VerticalAlignment="Center" />
+                            <TextBlock x:Name="DiscordBadge" Text="Микрофон Discord: —" FontSize="11.5"
+                                       Foreground="{DynamicResource TextSecondaryBrush}"
+                                       VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Border>
+                    <Border Style="{StaticResource Badge}">
+                        <StackPanel Orientation="Horizontal">
+                            <Ellipse x:Name="FooterDot" Width="8" Height="8" Fill="#6B7690"
+                                     Margin="0,0,7,0" VerticalAlignment="Center" />
+                            <TextBlock x:Name="FooterStatus" Text="Остановлено" FontSize="11.5"
+                                       Foreground="{DynamicResource TextSecondaryBrush}"
+                                       VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </Grid>
+
+            <Border Grid.Row="1" Height="1" Background="{DynamicResource BorderBrush}" Margin="0,13,0,0" />
+
+            <!-- ===== Содержимое: всё в одном окне ===== -->
+            <ScrollViewer Grid.Row="2" Margin="0,14,0,0" x:Name="MainScroll"
+                          VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="12*" />
+                        <ColumnDefinition Width="16" />
+                        <ColumnDefinition Width="11*" />
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Grid.Column="0" x:Name="ColRouting">
+                        <views:RoutingView x:Name="PageRouting" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="2" x:Name="ColSettings">
+                        <views:SettingsView x:Name="PageSettings" />
+                    </StackPanel>
+                </Grid>
+            </ScrollViewer>
+        </Grid>
+
+        <!-- ===== Тост об обновлении (оверлей поверх всего содержимого) ===== -->
+        <Border x:Name="UpdateToast" Panel.ZIndex="50"
+                Visibility="Collapsed" IsHitTestVisible="True"
+                HorizontalAlignment="Right" VerticalAlignment="Top"
+                Margin="0,16,16,0" Width="360" MaxHeight="420"
+                CornerRadius="14" Padding="16"
+                Background="{DynamicResource BgCardBrush}"
+                BorderBrush="{DynamicResource AccentBrush}" BorderThickness="1">
+            <Border.Effect>
+                <DropShadowEffect BlurRadius="18" ShadowDepth="4" Opacity="0.35" />
+            </Border.Effect>
+            <StackPanel>
+                <Grid>
+                    <TextBlock x:Name="UpdateToastTitle" FontSize="14.5" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextPrimaryBrush}"
+                               TextWrapping="Wrap" />
+                    <Button HorizontalAlignment="Right" Width="28" Height="28" Padding="0"
+                            Style="{StaticResource SecondaryButton}" Focusable="False"
+                            ToolTip="Закрыть"
+                            AutomationProperties.Name="Закрыть"
+                            Click="UpdateToastClose_Click">
+                        <TextBlock Text="&#xE711;" FontFamily="Segoe MDL2 Assets" FontSize="11"
+                                   Foreground="{DynamicResource TextSecondaryBrush}" />
+                    </Button>
+                </Grid>
+                <Border x:Name="UpdateToastNotesCard" Margin="0,10,0,0" Padding="10"
+                        CornerRadius="10" Background="{DynamicResource BgElevatedBrush}"
+                        BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+                    <ScrollViewer MaxHeight="200" VerticalScrollBarVisibility="Auto">
+                        <TextBlock x:Name="UpdateToastNotes" Style="{StaticResource SubText}"
+                                   TextWrapping="Wrap" />
+                    </ScrollViewer>
+                </Border>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
+                    <Button Style="{StaticResource PrimaryButton}" Padding="18,10"
+                            Content="Обновить"
+                            AutomationProperties.Name="Обновить"
+                            Click="UpdateToastUpdate_Click" />
+                </StackPanel>
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>

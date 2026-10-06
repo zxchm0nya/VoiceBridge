@@ -1,0 +1,143 @@
+<UserControl x:Class="VoiceBridge.Views.SettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d">
+    <StackPanel>
+
+        <!-- Проверка -->
+        <Border Style="{StaticResource CardStyle}">
+            <StackPanel>
+                <TextBlock Style="{StaticResource SectionTitle}" Text="Проверка" />
+                <TextBlock Style="{StaticResource SubText}" Margin="0,6,0,12" TextWrapping="Wrap"
+                           Text="Диагностика без Discord: кабель, наушники, микрофон." />
+
+                <WrapPanel>
+                    <Button x:Name="BtnTestCable" Style="{StaticResource SecondaryButton}"
+                            Content="▶  Тон в кабель" Margin="0,0,8,8"
+                            Click="BtnTestCable_Click" />
+                    <Button x:Name="BtnTestPhones" Style="{StaticResource SecondaryButton}"
+                            Content="♪  В наушники" Margin="0,0,8,8"
+                            Click="BtnTestPhones_Click" />
+                    <Button x:Name="BtnTestMic" Style="{StaticResource SecondaryButton}"
+                            Content="●  Микрофон" Margin="0,0,8,8"
+                            Click="BtnTestMic_Click" />
+                    <Button x:Name="BtnSelfTest" Style="{StaticResource SecondaryButton}"
+                            Content="⚙  Самопроверка" Margin="0,0,8,8"
+                            Click="BtnSelfTest_Click" />
+                </WrapPanel>
+
+                <TextBlock x:Name="CheckResult" Style="{StaticResource SubText}"
+                           Margin="0,6,0,0" TextWrapping="Wrap" />
+                <Button x:Name="BtnOpenLog" Style="{StaticResource SecondaryButton}"
+                        Content="Открыть журнал проверки" Margin="0,10,0,0"
+                        HorizontalAlignment="Left" Visibility="Collapsed"
+                        Click="BtnOpenLog_Click" />
+            </StackPanel>
+        </Border>
+
+        <!-- Буфер -->
+        <Border Style="{StaticResource CardStyle}">
+            <StackPanel>
+                <TextBlock Style="{StaticResource SectionTitle}" Text="Буфер и задержка" />
+                <Grid Margin="0,14,0,0">
+                    <TextBlock Style="{StaticResource FieldLabel}" Text="Буфер вывода" />
+                    <TextBlock x:Name="LblLatency" Style="{StaticResource AccentText}"
+                               HorizontalAlignment="Right" Text="50 мс" />
+                </Grid>
+                <Slider x:Name="SldLatency" Style="{StaticResource AppSlider}"
+                        Minimum="15" Maximum="150" Value="50"
+                        ValueChanged="SldLatency_ValueChanged" />
+                <TextBlock Style="{StaticResource MutedText}" Margin="0,8,0,0" TextWrapping="Wrap"
+                           Text="Меньше — ниже задержка, но выше риск щелчков под нагрузкой (рекомендуется 40–60 мс). Применяется после перезапуска маршрута." />
+            </StackPanel>
+        </Border>
+
+        <!-- Эхо -->
+        <Border Style="{StaticResource CardStyle}" BorderBrush="{DynamicResource WarningBrush}">
+            <StackPanel>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="&#xE7BA;" FontFamily="Segoe MDL2 Assets" FontSize="15"
+                               Foreground="{DynamicResource WarningBrush}" Margin="0,1,9,0" />
+                    <TextBlock Grid.Column="1" Style="{StaticResource SectionTitle}"
+                               Text="Собеседник может слышать себя" />
+                </Grid>
+                <TextBlock Style="{StaticResource SubText}" Margin="0,10,0,0" TextWrapping="Wrap"
+                           Text="Голос друга играет в ваших наушниках, попадает в захват и возвращается ему через ваш микрофон с задержкой. Так работает любой захват системного звука." />
+                <TextBlock Style="{StaticResource MutedText}" Margin="0,8,0,0" TextWrapping="Wrap"
+                           Text="• Показываете звук игры/видео — включите кабель, на время разговора жмите «Заглушить»." />
+                <TextBlock Style="{StaticResource MutedText}" Margin="0,4,0,0" TextWrapping="Wrap"
+                           Text="• Или выведите голосовой Discord на другое устройство вывода — тогда его голос не попадёт в наушники." />
+            </StackPanel>
+        </Border>
+
+        <!-- Автозапуск -->
+        <Border Style="{StaticResource CardStyle}">
+            <StackPanel>
+                <TextBlock Style="{StaticResource SectionTitle}" Text="Автозапуск" />
+                <Border Style="{StaticResource InnerBox}" Margin="0,14,0,0">
+                    <Grid>
+                        <StackPanel>
+                            <TextBlock Text="Запускать вместе с Windows" FontSize="13.5" FontWeight="SemiBold" />
+                            <TextBlock Style="{StaticResource MutedText}" Margin="0,5,0,0" TextWrapping="Wrap"
+                                       Text="VoiceBridge будет стартовать после входа. Маршрут включается кнопкой «Запустить»." />
+                        </StackPanel>
+                        <ToggleButton x:Name="TglAutostart" Style="{StaticResource ToggleSwitch}"
+                                      HorizontalAlignment="Right" VerticalAlignment="Top"
+                                      Click="TglAutostart_Click" />
+                    </Grid>
+                </Border>
+                <Border Style="{StaticResource InnerBox}" Margin="0,10,0,0">
+                    <Grid>
+                        <StackPanel>
+                            <TextBlock Text="Сворачивать при автозапуске" FontSize="13.5" FontWeight="SemiBold" />
+                            <TextBlock Style="{StaticResource MutedText}" Margin="0,5,0,0" TextWrapping="Wrap"
+                                       Text="При старте от Windows окно сразу уйдёт в трей-область панели задач." />
+                        </StackPanel>
+                        <ToggleButton x:Name="TglMinOnStart" Style="{StaticResource ToggleSwitch}"
+                                      HorizontalAlignment="Right" VerticalAlignment="Top"
+                                      Click="TglMinOnStart_Click" />
+                    </Grid>
+                </Border>
+            </StackPanel>
+        </Border>
+
+        <!-- Фон -->
+        <Border Style="{StaticResource CardStyle}">
+            <StackPanel>
+                <TextBlock Style="{StaticResource SectionTitle}" Text="Фон приложения" />
+                <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                    <Button Style="{StaticResource SecondaryButton}" Content="Выбрать картинку…"
+                            Click="BtnPickBg_Click" />
+                    <Button Style="{StaticResource SecondaryButton}" Content="Убрать фон" Margin="10,0,0,0"
+                            Click="BtnResetBg_Click" />
+                </StackPanel>
+                <Grid Margin="0,16,0,0">
+                    <TextBlock Style="{StaticResource FieldLabel}" Text="Затемнение фона" />
+                    <TextBlock x:Name="LblDim" Style="{StaticResource AccentText}"
+                               HorizontalAlignment="Right" Text="55%" />
+                </Grid>
+                <Slider x:Name="SldDim" Style="{StaticResource AppSlider}"
+                        Minimum="0" Maximum="90" Value="55"
+                        ValueChanged="SldDim_ValueChanged" />
+            </StackPanel>
+        </Border>
+
+        <!-- Сброс -->
+        <Border Style="{StaticResource CardStyle}">
+            <StackPanel>
+                <TextBlock Style="{StaticResource SectionTitle}" Text="Сброс" />
+                <Button Style="{StaticResource DangerButton}" Content="Сбросить настройки"
+                        HorizontalAlignment="Left" Margin="0,12,0,0" Click="BtnResetSettings_Click" />
+                <TextBlock Style="{StaticResource MutedText}" Margin="0,14,0,0"
+                           Text="VoiceBridge 1.0.0 • WASAPI shared mode • NAudio" />
+            </StackPanel>
+        </Border>
+
+    </StackPanel>
+</UserControl>

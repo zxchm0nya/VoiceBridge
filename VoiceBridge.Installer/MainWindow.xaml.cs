@@ -1,0 +1,339 @@
+using System.Diagnostics;
+using System.IO;
+using System.Reflection;
+using System.Windows;
+using System.Windows.Controls;
+using Microsoft.Win32;
+using MessageBox = System.Windows.MessageBox;
+
+namespace VoiceBridge.Installer;
+
+public partial class MainWindow : Window
+{
+    private const string AppExeResource = "VoiceBridge.App.exe";
+    private const string AppExeName = "VoiceBridge.exe";
+    private const string Version = "1.0.0";
+
+    private bool _silent;
+    private string _logFile = "";
+
+    private const string UninstallKey = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\VoiceBridge";
+    private const string AppKey = @"SOFTWARE\VoiceBridge";
+    private const string InstallerTitle = "VoiceBridge Setup";
+
+    private int _step = 1;
+    private bool _isUninstalling;
+
+    public MainWindow()
+    {
+        InitializeComponent();
+
+        var args = Environment.GetCommandLineArgs();
+        _isUninstalling = args.Contains("--uninstall");
+        if (_isUninstalling)
+        {
+            Title = "VoiceBridge Uninstaller";
+            SetupUninstallUi();
+        }
+        else if (args.Contains("--silent"))
+        {
+            _silent = true;
+            _logFile = Path.Combine(Path.GetTempPath(), "voicebridge-install.log");
+            Log("VoiceBridge silent install started");
+            Loaded += async (_, _) =>
+            {
+                var envPath = Environment.GetEnvironmentVariable("VB_INSTALL_DIR");
+                InstallPath.Text = string.IsNullOrEmpty(envPath)
+                    ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "VoiceBridge")
+                    : envPath;
+                Hide();
+                await RunInstall();
+                Close();
+            };
+        }
+
+        ShowStep(1);
+    }
+
+    private void ShowStep(int step)
+    {
+        _step = step;
+        StepWelcome.Visibility = step == 1 ? Visibility.Visible : Visibility.Collapsed;
+        StepPath.Visibility = step == 2 ? Visibility.Visible : Visibility.Collapsed;
+        StepProgress.Visibility = step == 3 ? Visibility.Visible : Visibility.Collapsed;
+        StepDone.Visibility = step == 4 ? Visibility.Visible : Visibility.Collapsed;
+
+        BtnBack.Visibility = step == 2 ? Visibility.Visible : Visibility.Collapsed;
+        BtnCancel.Visibility = step <= 2 ? Visibility.Visible : Visibility.Collapsed;
+        BtnNext.Visibility = step != 3 ? Visibility.Visible : Visibility.Collapsed;
+
+        BtnNext.Content = _isUninstalling
+            ? (step == 1 ? "Удалить" : step == 4 ? "Готово" : "Далее")
+            : (step == 1 ? "Далее" : step == 2 ? "Установить" : step == 4 ? "Готово" : "Далее");
+    }
+
+    private void Next_Click(object sender, RoutedEventArgs e)
+    {
+        if (_isUninstalling)
+        {
+            if (_step == 1) { ShowStep(3); _ = RunUninstall(); }
+            else if (_step == 4) { Close(); }
+            return;
+        }
+
+        switch (_step)
+        {
+            case 1:
+                ShowStep(2);
+                break;
+            case 2:
+                ShowStep(3);
+                _ = RunInstall();
+                break;
+            case 4:
+                if (LaunchAfter.IsChecked == true) LaunchApp();
+                Close();
+                break;
+        }
+    }
+
+    private void Back_Click(object sender, RoutedEventArgs e)
+    {
+        if (_step == 2) ShowStep(1);
+    }
+
+    private void Cancel_Click(object sender, RoutedEventArgs e) => Close();
+
+    private void Browse_Click(object sender, RoutedEventArgs e)
+    {
+        var dlg = new System.Windows.Forms.FolderBrowserDialog
+        {
+            Description = "Выберите папку для установки",
+            SelectedPath = InstallPath.Text,
+            ShowNewFolderButton = true,
+        };
+        if (dlg.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+            InstallPath.Text = dlg.SelectedPath;
+    }
+
+    private async Task RunInstall()
+    {
+        BtnNext.IsEnabled = false;
+
+        string target = InstallPath.Text.Trim();
+        string exeTarget = Path.Combine(target, AppExeName);
+
+        ProgressText.Text = "Проверка папки установки...";
+        InstallProgress.Value = 10;
+
+        try
+        {
+            Directory.CreateDirectory(target);
+
+            ProgressText.Text = "Распаковка VoiceBridge...";
+            InstallProgress.Value = 45;
+            await Task.Delay(100);
+
+            byte[]? data = ExtractResource(AppExeResource);
+            if (data == null)
+                throw new InvalidOperationException("Встроенные файлы приложения отсутствуют.");
+
+            await File.WriteAllBytesAsync(exeTarget, data);
+            InstallProgress.Value = 75;
+
+            ProgressText.Text = "Создание ярлыков...";
+            await Task.Delay(80);
+
+            var startMenu = Environment.GetFolderPath(Environment.SpecialFolder.Programs);
+            var startMenuDir = Path.Combine(startMenu, "VoiceBridge");
+            Directory.CreateDirectory(startMenuDir);
+
+            CreateShortcut(Path.Combine(startMenuDir, "VoiceBridge.lnk"), exeTarget);
+            if (ChkDesktopShortcut.IsChecked == true)
+                CreateShortcut(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "VoiceBridge.lnk"), exeTarget);
+
+            ProgressText.Text = "Регистрация деинсталлятора...";
+            await Task.Delay(80);
+            WriteRegistry(exeTarget);
+
+            InstallProgress.Value = 100;
+            ProgressText.Text = "Готово.";
+
+            DoneSub.Text = $"VoiceBridge установлен в:\n{target}";
+            ShowStep(4);
+        }
+        catch (Exception ex)
+        {
+            InstallProgress.Value = 0;
+            ProgressText.Text = "Ошибка установки: " + ex.Message;
+            Log("Install failed: " + ex);
+            if (_silent)
+            {
+                try { File.WriteAllText(Path.Combine(InstallPath.Text, "install-error.txt"), ex.ToString()); } catch { }
+                Close();
+                return;
+            }
+            MessageBox.Show("Не удалось выполнить установку.\n\n" + ex.Message,
+                InstallerTitle, MessageBoxButton.OK, MessageBoxImage.Error);
+            ShowStep(2);
+        }
+        finally
+        {
+            BtnNext.IsEnabled = true;
+        }
+    }
+
+    private async Task RunUninstall()
+    {
+        BtnNext.IsEnabled = false;
+        ProgressText.Text = "Удаление файлов...";
+        InstallProgress.Value = 40;
+
+        try
+        {
+            string? target = GetRegistryValue(AppKey, "InstallPath") as string;
+            if (!string.IsNullOrEmpty(target) && Directory.Exists(target))
+            {
+                foreach (var p in Process.GetProcessesByName(Path.GetFileNameWithoutExtension(AppExeName)))
+                    p.Kill();
+
+                await Task.Delay(150);
+                Directory.Delete(target, true);
+            }
+            InstallProgress.Value = 70;
+
+            var startMenuLink = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs), "VoiceBridge", "VoiceBridge.lnk");
+            var desktopLink = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "VoiceBridge.lnk");
+            if (File.Exists(startMenuLink)) File.Delete(startMenuLink);
+            if (File.Exists(desktopLink)) File.Delete(desktopLink);
+            var smDir = Path.GetDirectoryName(startMenuLink);
+            if (!string.IsNullOrEmpty(smDir) && Directory.Exists(smDir) && !Directory.EnumerateFileSystemEntries(smDir).Any())
+                Directory.Delete(smDir);
+
+            InstallProgress.Value = 90;
+
+            using (var key = Registry.LocalMachine.CreateSubKey(UninstallKey))
+                key?.DeleteSubKeyTree("", false);
+            using (var key = Registry.LocalMachine.CreateSubKey(AppKey))
+                key?.DeleteSubKeyTree("", false);
+
+            InstallProgress.Value = 100;
+            DoneSub.Text = "VoiceBridge удалён с вашего компьютера.";
+            ShowStep(4);
+        }
+        catch (Exception ex)
+        {
+            ProgressText.Text = "Ошибка удаления: " + ex.Message;
+            Log("Uninstall failed: " + ex);
+            if (_silent) { Close(); return; }
+            MessageBox.Show("Не удалось выполнить удаление.\n\n" + ex.Message,
+                InstallerTitle, MessageBoxButton.OK, MessageBoxImage.Error);
+            ShowStep(1);
+        }
+        finally
+        {
+            BtnNext.IsEnabled = true;
+        }
+    }
+
+    private void SetupUninstallUi()
+    {
+        BtnNext.Content = "Удалить";
+        ProgressText.Text = "Удаление VoiceBridge...";
+        StepWelcome.Children.Clear();
+        StepWelcome.Children.Add(new TextBlock
+        {
+            Text = "Удалить VoiceBridge?",
+            FontSize = 18,
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(0, 0, 0, 10)
+        });
+        StepWelcome.Children.Add(new TextBlock
+        {
+            Text = "Программа, ярлыки и записи реестра будут удалены с вашего компьютера.",
+            TextWrapping = TextWrapping.Wrap
+        });
+        StepPath.Visibility = Visibility.Collapsed;
+        ShowStep(1);
+    }
+
+    private void Log(string msg)
+    {
+        try { File.AppendAllText(_logFile, $"[{DateTime.Now:HH:mm:ss}] {msg}{Environment.NewLine}"); } catch { }
+    }
+
+    private static byte[]? ExtractResource(string name)
+    {
+        var asm = Assembly.GetExecutingAssembly();
+        var res = asm.GetManifestResourceNames().FirstOrDefault(r => r.EndsWith(name, StringComparison.OrdinalIgnoreCase));
+        if (res == null) return null;
+        using var stream = asm.GetManifestResourceStream(res);
+        if (stream == null) return null;
+        using var ms = new MemoryStream();
+        stream.CopyTo(ms);
+        return ms.ToArray();
+    }
+
+    private static void CreateShortcut(string lnkPath, string exePath)
+    {
+        try
+        {
+            var shellType = Type.GetTypeFromProgID("WScript.Shell");
+            if (shellType == null) return;
+            dynamic? wsh = Activator.CreateInstance(shellType);
+            if (wsh == null) return;
+            dynamic sc = wsh.CreateShortcut(lnkPath);
+            sc.TargetPath = exePath;
+            sc.WorkingDirectory = Path.GetDirectoryName(exePath) ?? "";
+            sc.IconLocation = exePath + ",0";
+            sc.Description = "VoiceBridge - наушники в микрофон для Discord";
+            sc.Save();
+        }
+        catch { }
+    }
+
+    private static void LaunchApp()
+    {
+        try
+        {
+            var target = Path.Combine(GetRegistryValue(AppKey, "InstallPath") as string ?? "", AppExeName);
+            if (File.Exists(target)) Process.Start(new ProcessStartInfo(target) { UseShellExecute = true });
+        }
+        catch { }
+    }
+
+    private void WriteRegistry(string exePath)
+    {
+        try
+        {
+            using (var k = Registry.LocalMachine.CreateSubKey(AppKey))
+            {
+                k.SetValue("InstallPath", Path.GetDirectoryName(exePath) ?? "");
+                k.SetValue("Version", Version);
+            }
+
+            using (var k = Registry.LocalMachine.CreateSubKey(UninstallKey))
+            {
+                k.SetValue("DisplayName", "VoiceBridge");
+                k.SetValue("DisplayVersion", Version);
+                k.SetValue("Publisher", "VoiceBridge");
+                k.SetValue("DisplayIcon", exePath);
+                k.SetValue("InstallLocation", Path.GetDirectoryName(exePath) ?? "");
+                k.SetValue("UninstallString", $"\"{Path.Combine(Path.GetDirectoryName(exePath) ?? "", "VoiceBridgeSetup.exe")}\" --uninstall");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log("Registry write failed: " + ex.Message);
+            if (!_silent)
+                MessageBox.Show("Файлы установлены, но запись записи деинсталлятора в реестр не удалась.\n\n" + ex.Message,
+                    InstallerTitle, MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
+    private static object? GetRegistryValue(string subKey, string name)
+    {
+        using var k = Registry.LocalMachine.OpenSubKey(subKey);
+        return k?.GetValue(name);
+    }
+}
