@@ -22,7 +22,7 @@
                 <TextBlock Text="VoiceBridge Installer" FontSize="18" FontWeight="Bold"
                            VerticalAlignment="Center" />
             </StackPanel>
-            <TextBlock Text="This wizard will install VoiceBridge on your computer." TextWrapping="Wrap" />
+            <TextBlock x:Name="StepWelcomeText" Text="This wizard will install VoiceBridge on your computer." TextWrapping="Wrap" />
             <TextBlock Text="Click Next to continue." Margin="0,12,0,0" />
         </StackPanel>
 

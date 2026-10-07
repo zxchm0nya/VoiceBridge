@@ -12,6 +12,7 @@ public partial class MainWindow : Window
 {
     private const string AppExeResource = "VoiceBridge.App.exe";
     private const string AppExeName = "VoiceBridge.exe";
+    private const string SetupExeName = "VoiceBridgeSetup.exe";
     private bool _silent;
     private string _logFile = "";
 
@@ -21,6 +22,8 @@ public partial class MainWindow : Window
 
     private int _step = 1;
     private bool _isUninstalling;
+    private bool _isUpdate;
+    private string _existingInstall = "";
 
     public MainWindow()
     {
@@ -28,10 +31,32 @@ public partial class MainWindow : Window
 
         var args = Environment.GetCommandLineArgs();
         _isUninstalling = args.Contains("--uninstall");
+
+        // Existing install in the registry means this setup updates in place.
+        var prev = GetRegistryValue(AppKey, "InstallPath") as string;
+        if (!string.IsNullOrEmpty(prev) && File.Exists(Path.Combine(prev, AppExeName)))
+        {
+            _isUpdate = true;
+            _existingInstall = prev;
+        }
+
         if (_isUninstalling)
         {
             Title = "VoiceBridge Uninstaller";
             SetupUninstallUi();
+            if (args.Contains("--silent"))
+            {
+                _silent = true;
+                _logFile = Path.Combine(Path.GetTempPath(), "voicebridge-install.log");
+                Log("VoiceBridge silent uninstall started");
+                Loaded += async (_, _) =>
+                {
+                    Hide();
+                    ShowStep(3);
+                    await RunUninstall();
+                    Close();
+                };
+            }
         }
         else if (args.Contains("--silent"))
         {
@@ -41,16 +66,78 @@ public partial class MainWindow : Window
             Loaded += async (_, _) =>
             {
                 var envPath = Environment.GetEnvironmentVariable("VB_INSTALL_DIR");
-                InstallPath.Text = string.IsNullOrEmpty(envPath)
-                    ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "VoiceBridge")
-                    : envPath;
+                InstallPath.Text = !string.IsNullOrEmpty(envPath)
+                    ? envPath
+                    : _isUpdate
+                        ? _existingInstall
+                        : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "VoiceBridge");
                 Hide();
                 await RunInstall();
                 Close();
             };
         }
+        else if (_isUpdate)
+        {
+            InstallPath.Text = _existingInstall;
+            StepWelcomeText.Text = "This wizard will update VoiceBridge on your computer. "
+                + "Existing settings are kept, only files are replaced.";
+        }
 
         ShowStep(1);
+    }
+
+    /// <summary>Kills a running VoiceBridge so its exe can be overwritten.</summary>
+    private static async Task StopRunningApp()
+    {
+        try
+        {
+            foreach (var p in Process.GetProcessesByName(Path.GetFileNameWithoutExtension(AppExeName)))
+                p.Kill();
+            await Task.Delay(300);
+        }
+        catch { }
+    }
+
+    /// <summary>
+    /// Deletes the install folder. When this setup was copied there (UninstallString),
+    /// its own exe is locked, so the rest is removed now and the leftover folder
+    /// is scheduled for deletion after we exit.
+    /// </summary>
+    private void RemoveInstallFolder(string target)
+    {
+        string self = Path.GetFullPath(Environment.ProcessPath ?? "");
+        string full = Path.GetFullPath(target);
+
+        bool selfInside = self.StartsWith(full + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+        if (!selfInside)
+        {
+            Directory.Delete(target, true);
+            return;
+        }
+
+        foreach (var entry in Directory.EnumerateFileSystemEntries(target))
+        {
+            try
+            {
+                if (Path.GetFullPath(entry).Equals(self, StringComparison.OrdinalIgnoreCase)) continue;
+                if (Directory.Exists(entry)) Directory.Delete(entry, true);
+                else File.Delete(entry);
+            }
+            catch (Exception ex) { Log("Leftover delete failed: " + ex.Message); }
+        }
+
+        // cmd waits for this process to exit, then removes the folder with our exe in it.
+        try
+        {
+            var psi = new ProcessStartInfo("cmd.exe",
+                $"/c ping -n 3 127.0.0.1 >nul & rmdir /s /q \"{full}\"")
+            {
+                CreateNoWindow = true,
+                UseShellExecute = false,
+            };
+            Process.Start(psi);
+        }
+        catch (Exception ex) { Log("Deferred folder delete failed: " + ex.Message); }
     }
 
     private void ShowStep(int step)
@@ -67,7 +154,7 @@ public partial class MainWindow : Window
 
         BtnNext.Content = _isUninstalling
             ? (step == 1 ? "Uninstall" : step == 4 ? "Finish" : "Next")
-            : (step == 1 ? "Next" : step == 2 ? "Install" : step == 4 ? "Finish" : "Next");
+            : (step == 1 ? "Next" : step == 2 ? (_isUpdate ? "Update" : "Install") : step == 4 ? "Finish" : "Next");
     }
 
     private void Next_Click(object sender, RoutedEventArgs e)
@@ -120,15 +207,23 @@ public partial class MainWindow : Window
 
         string target = InstallPath.Text.Trim();
         string exeTarget = Path.Combine(target, AppExeName);
+        bool updating = File.Exists(exeTarget);
 
-        ProgressText.Text = "Checking installation folder...";
+        ProgressText.Text = updating ? "Checking existing installation..." : "Checking installation folder...";
         InstallProgress.Value = 10;
 
         try
         {
             Directory.CreateDirectory(target);
 
-            ProgressText.Text = "Extracting VoiceBridge...";
+            if (updating)
+            {
+                // A running copy locks its exe: overwrite would silently fail.
+                ProgressText.Text = "Stopping running VoiceBridge...";
+                await StopRunningApp();
+            }
+
+            ProgressText.Text = updating ? "Updating VoiceBridge..." : "Extracting VoiceBridge...";
             InstallProgress.Value = 35;
             await Task.Delay(100);
 
@@ -136,6 +231,7 @@ public partial class MainWindow : Window
             if (data == null)
                 throw new InvalidOperationException("Bundled application data is missing.");
 
+            // OverwriteFiles semantics: updating over the old version just replaces the file.
             await File.WriteAllBytesAsync(exeTarget, data);
             InstallProgress.Value = 50;
 
@@ -154,10 +250,24 @@ public partial class MainWindow : Window
             await Task.Delay(80);
             WriteRegistry(exeTarget);
 
+            // UninstallString points at VoiceBridgeSetup.exe inside the install
+            // folder, so the setup must be copied there (skip when run from it).
+            try
+            {
+                string self = Environment.ProcessPath ?? "";
+                string setupCopy = Path.Combine(target, SetupExeName);
+                if (!string.IsNullOrEmpty(self)
+                    && !string.Equals(Path.GetFullPath(self), Path.GetFullPath(setupCopy), StringComparison.OrdinalIgnoreCase))
+                    File.Copy(self, setupCopy, true);
+            }
+            catch (Exception ex) { Log("Setup copy failed: " + ex.Message); }
+
             InstallProgress.Value = 100;
             ProgressText.Text = "Done.";
 
-            DoneSub.Text = $"VoiceBridge was installed to:\n{target}";
+            DoneSub.Text = updating
+                ? $"VoiceBridge was updated to the latest version:\n{target}"
+                : $"VoiceBridge was installed to:\n{target}";
             ShowStep(4);
         }
         catch (Exception ex)
@@ -195,7 +305,7 @@ public partial class MainWindow : Window
                     p.Kill();
 
                 await Task.Delay(150);
-                Directory.Delete(target, true);
+                RemoveInstallFolder(target);
             }
             InstallProgress.Value = 70;
 
