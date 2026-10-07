@@ -1,5 +1,7 @@
 using System.Diagnostics;
 using System.IO;
+using System.IO.Compression;
+using System.Net.Http;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
@@ -24,6 +26,10 @@ public partial class MainWindow : Window
     private bool _isUninstalling;
     private bool _isUpdate;
     private string _existingInstall = "";
+    private bool _cableMissing;
+    private bool _installCable;
+
+    private const string CableUrl = "https://download.vb-audio.com/Download_CABLE/VBCABLE_Driver_Pack43.zip";
 
     public MainWindow()
     {
@@ -52,7 +58,7 @@ public partial class MainWindow : Window
                 Loaded += async (_, _) =>
                 {
                     Hide();
-                    ShowStep(3);
+                    ShowStep(4);
                     await RunUninstall();
                     Close();
                 };
@@ -145,24 +151,28 @@ public partial class MainWindow : Window
         _step = step;
         StepWelcome.Visibility = step == 1 ? Visibility.Visible : Visibility.Collapsed;
         StepPath.Visibility = step == 2 ? Visibility.Visible : Visibility.Collapsed;
-        StepProgress.Visibility = step == 3 ? Visibility.Visible : Visibility.Collapsed;
-        StepDone.Visibility = step == 4 ? Visibility.Visible : Visibility.Collapsed;
+        StepDeps.Visibility = step == 3 ? Visibility.Visible : Visibility.Collapsed;
+        StepProgress.Visibility = step == 4 ? Visibility.Visible : Visibility.Collapsed;
+        StepDone.Visibility = step == 5 ? Visibility.Visible : Visibility.Collapsed;
 
-        BtnBack.Visibility = step == 2 ? Visibility.Visible : Visibility.Collapsed;
-        BtnCancel.Visibility = step <= 2 ? Visibility.Visible : Visibility.Collapsed;
-        BtnNext.Visibility = step != 3 ? Visibility.Visible : Visibility.Collapsed;
+        BtnBack.Visibility = step is 2 or 3 ? Visibility.Visible : Visibility.Collapsed;
+        BtnCancel.Visibility = step <= 3 ? Visibility.Visible : Visibility.Collapsed;
+        BtnNext.Visibility = step != 4 ? Visibility.Visible : Visibility.Collapsed;
 
         BtnNext.Content = _isUninstalling
-            ? (step == 1 ? "Uninstall" : step == 4 ? "Finish" : "Next")
-            : (step == 1 ? "Next" : step == 2 ? (_isUpdate ? "Update" : "Install") : step == 4 ? "Finish" : "Next");
+            ? (step == 1 ? "Uninstall" : step == 5 ? "Finish" : "Next")
+            : (step == 1 ? "Next"
+                : step == 2 ? (_isUpdate ? "Update" : "Install")
+                : step == 3 ? "Continue"
+                : step == 5 ? "Finish" : "Next");
     }
 
     private void Next_Click(object sender, RoutedEventArgs e)
     {
         if (_isUninstalling)
         {
-            if (_step == 1) { ShowStep(3); _ = RunUninstall(); }
-            else if (_step == 4) { Close(); }
+            if (_step == 1) { ShowStep(4); _ = RunUninstall(); }
+            else if (_step == 5) { Close(); }
             return;
         }
 
@@ -172,10 +182,18 @@ public partial class MainWindow : Window
                 ShowStep(2);
                 break;
             case 2:
-                ShowStep(3);
+                // Virtual cable missing -> ask about the dependency before installing.
+                _cableMissing = !IsVirtualCableInstalled();
+                if (_cableMissing) ShowStep(3);
+                else ShowStep(4);
+                if (_step == 4) _ = RunInstall();
+                break;
+            case 3:
+                _installCable = ChkInstallCable.IsChecked == true;
+                ShowStep(4);
                 _ = RunInstall();
                 break;
-            case 4:
+            case 5:
                 if (LaunchAfter.IsChecked == true) LaunchApp();
                 Close();
                 break;
@@ -185,6 +203,16 @@ public partial class MainWindow : Window
     private void Back_Click(object sender, RoutedEventArgs e)
     {
         if (_step == 2) ShowStep(1);
+        else if (_step == 3) ShowStep(2);
+    }
+
+    private void CableChk_Changed(object sender, RoutedEventArgs e)
+    {
+        // Fires from XAML while the panel is still being parsed.
+        if (DepsWarning == null) return;
+        DepsWarning.Visibility = ChkInstallCable.IsChecked == true
+            ? Visibility.Collapsed
+            : Visibility.Visible;
     }
 
     private void Cancel_Click(object sender, RoutedEventArgs e) => Close();
@@ -209,11 +237,24 @@ public partial class MainWindow : Window
         string exeTarget = Path.Combine(target, AppExeName);
         bool updating = File.Exists(exeTarget);
 
-        ProgressText.Text = updating ? "Checking existing installation..." : "Checking installation folder...";
-        InstallProgress.Value = 10;
+        ProgressText.Text = "Checking dependencies...";
+        InstallProgress.Value = 5;
 
         try
         {
+            // Interactive flow sets _cableMissing at step 2; silent mode never asked.
+            if (_silent)
+            {
+                _cableMissing = !IsVirtualCableInstalled();
+                // VB-Cable has no silent mode: never pop its window from --silent.
+                if (_cableMissing)
+                    Log("Warning: no virtual audio cable found. Install VB-Cable manually, VoiceBridge cannot work without it.");
+            }
+            if (_cableMissing && _installCable)
+                await InstallVirtualCable();
+
+            ProgressText.Text = updating ? "Checking existing installation..." : "Checking installation folder...";
+            InstallProgress.Value = 10;
             Directory.CreateDirectory(target);
 
             if (updating)
@@ -268,7 +309,9 @@ public partial class MainWindow : Window
             DoneSub.Text = updating
                 ? $"VoiceBridge was updated to the latest version:\n{target}"
                 : $"VoiceBridge was installed to:\n{target}";
-            ShowStep(4);
+            if (_cableMissing)
+                DoneSub.Text += "\n\nWarning: no virtual audio cable was found. VoiceBridge cannot work without it and will show a warning at every launch.";
+            ShowStep(5);
         }
         catch (Exception ex)
         {
@@ -326,7 +369,7 @@ public partial class MainWindow : Window
 
             InstallProgress.Value = 100;
             DoneSub.Text = "VoiceBridge was removed from your computer.";
-            ShowStep(4);
+            ShowStep(5);
         }
         catch (Exception ex)
         {
@@ -366,6 +409,83 @@ public partial class MainWindow : Window
     private void Log(string msg)
     {
         try { File.AppendAllText(_logFile, $"[{DateTime.Now:HH:mm:ss}] {msg}{Environment.NewLine}"); } catch { }
+    }
+
+    /// <summary>True when a virtual audio cable (VB-Cable or any cable-like device) exists.</summary>
+    private static bool IsVirtualCableInstalled()
+    {
+        try
+        {
+            // VB-Cable drops a kernel driver into system32\drivers.
+            var drivers = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "drivers");
+            if (Directory.Exists(drivers)
+                && Directory.GetFiles(drivers, "vbaudio*.sys").Length > 0)
+                return true;
+
+            // VB-Cable registers itself under Uninstall.
+            using var un = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall");
+            if (un != null)
+            {
+                foreach (var name in un.GetSubKeyNames())
+                {
+                    if (name.StartsWith("VB:VBCABLE", StringComparison.OrdinalIgnoreCase))
+                        return true;
+                }
+            }
+        }
+        catch { }
+        return false;
+    }
+
+    /// <summary>
+    /// Downloads the official VB-Cable pack and runs its setup. The pack has no
+    /// silent mode, so its own window is shown and we wait for the user to finish.
+    /// </summary>
+    private async Task InstallVirtualCable()
+    {
+        ProgressText.Text = "Downloading VB-Cable installer...";
+        InstallProgress.Value = 15;
+        Log("Downloading " + CableUrl);
+
+        string dir = Path.Combine(Path.GetTempPath(), "voicebridge-vbcable");
+        string zip = Path.Combine(dir, "VBCABLE_Driver_Pack43.zip");
+        Directory.CreateDirectory(dir);
+
+        using (var http = new HttpClient())
+        {
+            using var resp = await http.GetAsync(CableUrl);
+            resp.EnsureSuccessStatusCode();
+            var bytes = await resp.Content.ReadAsByteArrayAsync();
+            await File.WriteAllBytesAsync(zip, bytes);
+        }
+
+        InstallProgress.Value = 30;
+        ProgressText.Text = "Extracting VB-Cable installer...";
+        ZipFile.ExtractToDirectory(zip, dir, true);
+
+        string setup = Path.Combine(dir,
+            Environment.Is64BitOperatingSystem ? "VBCABLE_Setup_x64.exe" : "VBCABLE_Setup.exe");
+        if (!File.Exists(setup))
+            throw new FileNotFoundException("VB-Cable setup executable not found.", setup);
+
+        ProgressText.Text = "Running VB-Cable setup - complete it in its window...";
+        Log("Running " + setup);
+        var psi = new ProcessStartInfo(setup) { UseShellExecute = true, WorkingDirectory = dir };
+        using var proc = Process.Start(psi);
+        if (proc != null)
+            await proc.WaitForExitAsync();
+
+        InstallProgress.Value = 45;
+        if (IsVirtualCableInstalled())
+        {
+            Log("VB-Cable installed");
+            _cableMissing = false;
+        }
+        else
+        {
+            Log("VB-Cable setup finished but no cable detected (reboot may be required)");
+            _cableMissing = true;
+        }
     }
 
     private static byte[]? ExtractResource(string name)

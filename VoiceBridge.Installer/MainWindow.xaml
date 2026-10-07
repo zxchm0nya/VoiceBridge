@@ -42,14 +42,29 @@
             <CheckBox x:Name="LaunchAfter" Content="Launch VoiceBridge after installation" IsChecked="True" Margin="0,6,0,0" />
         </StackPanel>
 
-        <!-- Step 3: Progress -->
+        <!-- Step 3: Dependencies (only when the virtual cable is missing) -->
+        <StackPanel x:Name="StepDeps" Grid.Row="0" Visibility="Collapsed">
+            <TextBlock Text="Missing dependency" FontSize="18" FontWeight="Bold" Margin="0,0,0,10" />
+            <TextBlock x:Name="DepsText"
+                       Text="Virtual audio cable (VB-Cable) is not installed. VoiceBridge cannot work without it: there is nowhere to send the sound."
+                       TextWrapping="Wrap" Margin="0,0,0,10" />
+            <TextBlock x:Name="DepsHint"
+                       Text="Click Install to download the official VB-Cable setup and follow its window, or uncheck the box to skip it."
+                       TextWrapping="Wrap" Margin="0,0,0,12" />
+            <CheckBox x:Name="ChkInstallCable" Content="Download and install VB-Cable now" IsChecked="True"
+                      Checked="CableChk_Changed" Unchecked="CableChk_Changed" />
+            <TextBlock x:Name="DepsWarning" Visibility="Collapsed" TextWrapping="Wrap" Margin="0,12,0,0"
+                       Text="Without a virtual cable VoiceBridge will show a warning at every launch and will not be able to work." />
+        </StackPanel>
+
+        <!-- Step 4: Progress -->
         <StackPanel x:Name="StepProgress" Grid.Row="0" Visibility="Collapsed">
             <TextBlock Text="Installing..." FontSize="18" FontWeight="Bold" Margin="0,0,0,10" />
             <TextBlock x:Name="ProgressText" Text="Preparing..." Margin="0,0,0,12" />
             <ProgressBar x:Name="InstallProgress" Height="20" Minimum="0" Maximum="100" />
         </StackPanel>
 
-        <!-- Step 4: Done -->
+        <!-- Step 5: Done -->
         <StackPanel x:Name="StepDone" Grid.Row="0" Visibility="Collapsed">
             <TextBlock Text="Installation Complete" FontSize="18" FontWeight="Bold" Margin="0,0,0,10" />
             <TextBlock x:Name="DoneSub" Text="VoiceBridge has been installed successfully." TextWrapping="Wrap" />

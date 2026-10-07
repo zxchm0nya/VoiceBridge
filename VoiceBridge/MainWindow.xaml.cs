@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows;
@@ -67,9 +68,41 @@ public partial class MainWindow : Window
             _ = Dispatcher.BeginInvoke(async () =>
             {
                 await Task.Delay(1200);
+                WarnIfNoVirtualCable();
                 await UpdateChecker.CheckInBackgroundAsync();
             }, DispatcherPriority.Background);
         }
+    }
+
+    /// <summary>VoiceBridge has nowhere to send sound without a virtual cable.</summary>
+    private void WarnIfNoVirtualCable()
+    {
+        try
+        {
+            bool cable =
+                AudioDevices.Render().Any(r => AudioDevices.LooksVirtual(r.Name))
+                || AudioDevices.Capture().Any(c => AudioDevices.LooksVirtual(c.Name));
+            if (cable) return;
+
+            var result = MessageBox.Show(
+                "Виртуальный кабель не найден\n\n"
+                + "Без него VoiceBridge не работает: звук некуда отправлять. "
+                + "Установите VB-Cable (на установщике можно поставить его автоматически) и перезапустите программу.\n\n"
+                + "Открыть страницу скачивания VB-Cable?",
+                "VoiceBridge",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning);
+
+            if (result == MessageBoxResult.Yes)
+            {
+                try
+                {
+                    Process.Start(new ProcessStartInfo("https://vb-audio.com/Cable/") { UseShellExecute = true });
+                }
+                catch { }
+            }
+        }
+        catch { }
     }
 
     private void OnUpdateChecked(UpdateInfo? info)
